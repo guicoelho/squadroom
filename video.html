@@ -1,0 +1,122 @@
+<html>
+<head>
+  <title>Squadroom</title>
+  <script type="text/javascript" src="https://ajax.googleapis.com/ajax/libs/jquery/1.8/jquery.min.js"></script>
+  <script type="text/javascript" src="https://cdnjs.cloudflare.com/ajax/libs/peerjs/0.3.14/peer.min.js"></script>
+  <script type="text/javascript" src="https://cdnjs.cloudflare.com/ajax/libs/underscore.js/1.8.3/underscore-min.js"></script>
+  <script type="text/javascript" src="https://www.gstatic.com/firebasejs/3.5.1/firebase.js"></script>
+
+  <script>
+    // Initialize Firebase
+    var config = {
+      apiKey: "AIzaSyCO40WCo2IwQhvv8GW4s0IaNijU858Qa8M",
+      authDomain: "squadroom-8add6.firebaseapp.com",
+      databaseURL: "https://squadroom-8add6.firebaseio.com",
+      storageBucket: "squadroom-8add6.appspot.com",
+      messagingSenderId: "510319315369"
+    };
+    firebase.initializeApp(config);
+    var database = firebase.database();
+
+    // Compatibility shim
+    navigator.getUserMedia = navigator.getUserMedia || navigator.webkitGetUserMedia || navigator.mozGetUserMedia;
+    
+    var id = prompt('Enter your name', 'Your name');
+    var peer = new Peer(id, {host: '192.168.178.20', port: 9000, path: '/squadroom'});
+    
+    // Connect to signal server
+    peer.on('open', function(){
+      console.log('Your id is:' + peer.id);
+    });
+
+    // Handle incomming connection
+    peer.on('call', function(call){
+      // Answer the call automatically (instead of prompting user)
+      call.answer(window.localStream);
+      addParticipant(call);
+    });
+
+    peer.on('error', function(err){
+      alert(err.message);
+    });
+
+    function startLocalStream () {
+      // Get audio/video stream
+      navigator.getUserMedia(
+        {
+          audio: false,
+          video: { width: 320, height: 240 }
+          }, function(stream){
+        // Set your video displays
+        $('#my-video').prop('src', URL.createObjectURL(stream));
+        window.localStream = stream;
+        $('#get-media-error').hide();
+        
+        callAllUsers();
+      }, function(){ $('#get-media-error').show(); });
+    }
+
+    function callAllUsers(){
+      // TODO: Ask server who's online
+      var users = database.ref('/main').once('value').then(function(snapshot) {
+            var users = snapshot.val();
+            console.log(users);
+            _.map(users, function(attributes, user){
+              console.log(user);
+              if (user != peer.id) {
+                var call = peer.call(user, window.localStream);
+                addParticipant(call);
+                console.log('Calling: ' + user);
+              }
+            });
+          });
+    }
+    function addParticipant(call) {
+      // Display video from this participant
+      call.on('stream', function(stream){
+        var src = URL.createObjectURL(stream);
+        $('.videos').append('<video id="their-video" src="' + src + '" autoplay></video>');
+      });
+      // Handle peer disconnected
+      call.on('close', function(stream){
+        // TODO: Remove video
+        // TODO: Tell server peer is not online anymore
+      });      
+    }
+
+    // When page is loaded
+    $(function(){
+      // Retry if getUserMedia fails
+      $('#get-media-retry').click(function(){
+        $('#get-media-error').hide();
+        startLocalStream();
+      });
+
+      startLocalStream();
+    });
+    
+  </script>
+
+
+</head>
+
+<body>
+
+  <div class="pure-g">
+
+      <!-- Video area -->
+      <div class="pure-u-2-3" id="video-container">
+        <div class="videos">
+        </div>
+        <video id="my-video" muted="true" autoplay></video>
+      </div>
+
+      <!-- Get local audio/video stream -->
+        <div id="get-media-error">
+          <p>Failed to access the webcam and microphone. Make sure to run this demo on an http server and click allow when asked for permission by the browser.</p>
+          <a href="#" class="pure-button pure-button-error" id="get-media-retry">Try again</a>
+        </div>
+
+
+</body>
+</html>
